@@ -48,6 +48,7 @@ pub fn eval_inf(t : TermInf, d : Env) -> Value {
     Sigma(a, b) => VSigma(eval_chk(a, d), fn(x) { eval_chk(b, cons(x, d)) })
     Fst(p) => v_fst(eval_inf(p, d))
     Snd(p) => v_snd(eval_inf(p, d))
+    UnitType => VStar
   }
 }
 
@@ -57,6 +58,7 @@ pub fn eval_chk(t : TermChk, d : Env) -> Value {
     Inf(i) => eval_inf(i, d)
     Lam(e) => VLam(x => eval_chk(e, cons(x, d)))
     Pair(x, y) => VPair(eval_chk(x, d), eval_chk(y, d))
+    UnitElement => VUnitElement
   }
 }
 
@@ -80,6 +82,7 @@ pub fn subst_inf(i : Int, r : TermInf, t : TermInf) -> TermInf {
     Sigma(a, b) => Sigma(subst_chk(i, r, a), subst_chk(i + 1, r, b))
     Fst(p) => Fst(subst_inf(i, r, p))
     Snd(p) => Snd(subst_inf(i, r, p))
+    UnitType => UnitType
   }
 }
 
@@ -89,6 +92,7 @@ pub fn subst_chk(i : Int, r : TermInf, t : TermChk) -> TermChk {
     Inf(e) => Inf(subst_inf(i, r, e))
     Lam(e) => Lam(subst_chk(i + 1, r, e))
     Pair(x, y) => Pair(subst_chk(i, r, x), subst_chk(i, r, y))
+    UnitElement => UnitElement
   }
 }
 
@@ -101,6 +105,8 @@ pub fn quote(i : Int, v : Value) -> TermChk {
     VPi(v, f) => Inf(Pi(quote(i, v), quote(i + 1, f(v_free(Quote(i))))))
     VSigma(v, f) => Inf(Sigma(quote(i, v), quote(i + 1, f(v_free(Quote(i))))))
     VPair(a, b) => Pair(quote(i, a), quote(i, b))
+    VUnitType => Inf(UnitType)
+    VUnitElement => UnitElement
   }
 }
 
@@ -189,6 +195,7 @@ pub fn type_inf(i : Int, g : Context, t : TermInf) -> Type raise TypeError {
         _ => raise TypeError("Snd expects a Sigma type")
       }
     }
+    UnitType => VStar
     _ => panic()
   }
 }
@@ -225,6 +232,11 @@ pub fn type_chk(
           let v1 = eval_chk(e1, empty())
           type_chk(i, g, e2, b(v1))
         }
+        _ => raise TypeError("Type Mismatch")
+      }
+    UnitElement =>
+      match v {
+        VUnitType => ()
         _ => raise TypeError("Type Mismatch")
       }
   }
