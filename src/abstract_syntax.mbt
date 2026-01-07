@@ -44,7 +44,7 @@ pub(all) enum Value {
 }
 
 ///|
-pub typealias Value as Type
+pub type Type = Value
 
 ///|
 pub type Context = @list.List[(Name, Type)]
