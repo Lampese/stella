@@ -10,6 +10,7 @@ pub(all) enum TermChk {
   Inf(TermInf)
   Lam(TermChk)
   Pair(TermChk, TermChk)
+  UnitElement
 } derive(Show, Eq)
 
 ///|
@@ -23,6 +24,7 @@ pub(all) enum TermInf {
   App(TermInf, TermChk)
   Fst(TermInf)
   Snd(TermInf)
+  UnitType
 } derive(Show, Eq)
 
 ///|
@@ -41,6 +43,8 @@ pub(all) enum Value {
   VSigma(Value, (Value) -> Value)
   VPair(Value, Value)
   VNeutral(Neutral)
+  VUnitType
+  VUnitElement
 }
 
 ///|
