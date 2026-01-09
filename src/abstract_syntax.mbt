@@ -19,7 +19,7 @@ pub(all) enum TermChk {
 ///|
 pub(all) enum TermInf {
   Ann(TermChk, TermChk)
-  Star
+  Universe(Int)
   Pi(TermChk, TermChk)
   Sigma(TermChk, TermChk)
   Bound(Int)
@@ -51,7 +51,7 @@ pub(all) enum Neutral {
 ///|
 pub(all) enum Value {
   VLam((Value) -> Value)
-  VStar
+  VUniverse(Int)
   VPi(Value, (Value) -> Value)
   VSigma(Value, (Value) -> Value)
   VPair(Value, Value)
