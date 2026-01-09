@@ -5,7 +5,9 @@ using @list {cons, empty}
 pub type Env = @list.List[Value]
 
 ///|
-pub suberror TypeError String
+pub suberror TypeError {
+  TypeError(String)
+}
 
 ///|
 pub fn v_free(n : Name) -> Value {
