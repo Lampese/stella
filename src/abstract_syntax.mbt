@@ -46,7 +46,7 @@ pub(all) enum Neutral {
   NSnd(Neutral)
   NJElim(Value, Value, Value, Value, Value, Neutral)
   NWRec(Value, (Value) -> Value, Value, Value, Neutral)
-}
+} derive(Show)
 
 ///|
 pub(all) enum Value {
@@ -62,7 +62,7 @@ pub(all) enum Value {
   VRfl(Value)
   VW(Value, (Value) -> Value)
   VSup(Value, (Value) -> Value)
-}
+} derive(Show)
 
 ///|
 pub type Type = Value
