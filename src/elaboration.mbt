@@ -39,8 +39,6 @@ pub fn v_snd(v : Value) -> Value {
   }
 }
 
-// J-Eliminator 归约: J(..., Rfl x) -> method
-
 ///|
 pub fn v_j_elim(
   a : Value,
@@ -76,10 +74,59 @@ pub fn v_w_rec(
 }
 
 ///|
+pub fn v_max_univ(v1 : Value, v2 : Value) -> Value {
+  match (v1, v2) {
+    (VUniverse(u1), VUniverse(u2)) => VUniverse(u1.max(u2))
+    _ => panic()
+  }
+}
+
+///|
+fn ensure_inf(
+  i : Int,
+  g : Context,
+  d : Env,
+  t : TermChk,
+) -> Value raise TypeError {
+  guard t is Inf(t_inf) else { raise TypeError("Type must be Inf") }
+  type_inf(i, g, d, t_inf)
+}
+
+///|
+fn ensure_univ(v : Value) -> Int raise TypeError {
+  match v {
+    VUniverse(u) => u
+    _ => raise TypeError("Expected a universe")
+  }
+}
+
+///|
+pub fn subtyping(i : Int, v1 : Value, v2 : Value) -> Bool {
+  match (v1, v2) {
+    (VUniverse(u1), VUniverse(u2)) => u1 <= u2
+    (VPi(a1, b1), VPi(a2, b2)) => {
+      if quote(i, a1) != quote(i, a2) {
+        return false
+      }
+      let v = v_free(Quote(i))
+      subtyping(i + 1, b1(v), b2(v))
+    }
+    (VSigma(a1, b1), VSigma(a2, b2)) => {
+      if not(subtyping(i, a1, a2)) {
+        return false
+      }
+      let v = v_free(Quote(i))
+      subtyping(i + 1, b1(v), b2(v))
+    }
+    _ => quote(i, v1) == quote(i, v2)
+  }
+}
+
+///|
 pub fn eval_inf(t : TermInf, d : Env) -> Value {
   match t {
     Ann(e, _) => eval_chk(e, d)
-    Star => VStar
+    Universe(u) => VUniverse(u)
     Pi(a, b) => VPi(eval_chk(a, d), fn(x) { eval_chk(b, cons(x, d)) })
     Sigma(a, b) => VSigma(eval_chk(a, d), fn(x) { eval_chk(b, cons(x, d)) })
     Bound(i) => d.iter().nth(i).unwrap()
@@ -102,10 +149,7 @@ pub fn eval_inf(t : TermInf, d : Env) -> Value {
     WRec(a, b, mot, step, target) => {
       let va = eval_chk(a, d)
       let vb_val = eval_chk(b, d)
-      let vb = match vb_val {
-        VPi(_, f) => f
-        _ => panic()
-      }
+      let vb = fn(v) { v_app(vb_val, v) }
       v_w_rec(va, vb, eval_chk(mot, d), eval_chk(step, d), eval_inf(target, d))
     }
   }
@@ -134,7 +178,7 @@ pub fn eval_chk(t : TermChk, d : Env) -> Value {
 ///|
 pub fn quote(i : Int, v : Value) -> TermChk {
   match v {
-    VStar => Inf(Star)
+    VUniverse(u) => Inf(Universe(u))
     VPi(a, b) => Inf(Pi(quote(i, a), quote(i + 1, b(v_free(Quote(i))))))
     VSigma(a, b) => Inf(Sigma(quote(i, a), quote(i + 1, b(v_free(Quote(i))))))
     VLam(f) => Lam(quote(i + 1, f(v_free(Quote(i)))))
@@ -188,24 +232,31 @@ pub fn type_inf(
   t : TermInf,
 ) -> Type raise TypeError {
   match t {
-    Star | UnitType => VStar
+    Universe(u) => VUniverse(u + 1)
+    UnitType => VUniverse(0)
     Ann(e, dt) => {
-      type_chk(i, g, d, dt, VStar)
-      let ty = eval_chk(dt, d)
-      type_chk(i, g, d, e, ty)
-      ty
+      guard dt is Inf(t_inf) else { raise TypeError("Type must be Inf") }
+      let ti = type_inf(i, g, d, t_inf)
+      match ti {
+        VUniverse(_) => {
+          let ty = eval_inf(t_inf, d)
+          type_chk(i, g, d, e, ty)
+          ty
+        }
+        _ => raise TypeError("The annotation's type is not a type")
+      }
     }
     Pi(a, b) | Sigma(a, b) | W(a, b) => {
-      type_chk(i, g, d, a, VStar)
+      let u1 = ensure_inf(i, g, d, a) |> ensure_univ()
       let va = eval_chk(a, d)
-      type_chk(
-        i + 1,
-        cons((Local(i), va), g),
-        cons(v_free(Local(i)), d),
-        b,
-        VStar,
-      )
-      VStar
+      let u2 = ensure_inf(
+          i + 1,
+          cons((Local(i), va), g),
+          cons(v_free(Local(i)), d),
+          b,
+        )
+        |> ensure_univ()
+      VUniverse(u1.max(u2))
     }
     Bound(j) => {
       let val = d.iter().nth(j).unwrap()
@@ -243,38 +294,64 @@ pub fn type_inf(
         _ => raise TypeError("Snd expects Sigma")
       }
     Id(a, x, y) => {
-      type_chk(i, g, d, a, VStar)
+      let u = ensure_inf(i, g, d, a) |> ensure_univ()
       let va = eval_chk(a, d)
       type_chk(i, g, d, x, va)
       type_chk(i, g, d, y, va)
-      VStar
+      VUniverse(u)
     }
     JElim(a, x, mot, base, y, p) => {
-      type_chk(i, g, d, a, VStar)
+      ensure_inf(i, g, d, a) |> ensure_univ() |> ignore
       let va = eval_chk(a, d)
       type_chk(i, g, d, x, va)
       let vx = eval_chk(x, d)
       type_chk(i, g, d, y, va)
       let vy = eval_chk(y, d)
       type_chk(i, g, d, Inf(p), VId(va, vx, vy))
-      let mot_ty = VPi(va, fn(y_p) { VPi(VId(va, vx, y_p), fn(_) { VStar }) })
-      type_chk(i, g, d, mot, mot_ty)
+      let mot_ty = ensure_inf(i, g, d, mot)
+      match mot_ty {
+        VPi(_, f1) =>
+          match f1(v_free(Quote(i))) {
+            VPi(_, f2) => {
+              let co_domain = f2(v_free(Quote(i + 1)))
+              ensure_univ(co_domain) |> ignore
+            }
+            _ => raise TypeError("Motive must be a binary function")
+          }
+        _ => raise TypeError("Motive must be a function")
+      }
       let v_mot = eval_chk(mot, d)
       type_chk(i, g, d, base, v_app(v_app(v_mot, vx), VRfl(vx)))
       v_app(v_app(v_mot, vy), eval_inf(p, d))
     }
     WRec(a, b, mot, step, target) => {
-      type_chk(i, g, d, a, VStar)
+      ensure_inf(i, g, d, a) |> ensure_univ() |> ignore
       let va = eval_chk(a, d)
-      type_chk(i, g, d, b, VPi(va, fn(_) { VStar }))
-      let vb_val = eval_chk(b, d)
-      let vb = match vb_val {
-        VPi(_, f) => f
-        _ => panic()
+      let b_ty = ensure_inf(i, g, d, b)
+      match b_ty {
+        VPi(dom, cod) => {
+          if quote(i, dom) != quote(i, va) {
+            raise TypeError("W-type: B domain mismatch")
+          }
+          let _ = ensure_univ(cod(v_free(Quote(i))))
+
+        }
+        _ => raise TypeError("WRec: B must be a function")
       }
+      let vb_val = eval_chk(b, d)
+      let vb = fn(v) { v_app(vb_val, v) }
       let v_w = VW(va, vb)
       type_chk(i, g, d, Inf(target), v_w)
-      type_chk(i, g, d, mot, VPi(v_w, fn(_) { VStar }))
+      let mot_ty = ensure_inf(i, g, d, mot)
+      match mot_ty {
+        VPi(dom, cod) => {
+          if quote(i, dom) != quote(i, v_w) {
+            raise TypeError("WRec: motive domain mismatch")
+          }
+          ensure_univ(cod(v_free(Quote(i)))) |> ignore
+        }
+        _ => raise TypeError("WRec: motive must be a function")
+      }
       let v_mot = eval_chk(mot, d)
       let step_ty = VPi(va, fn(s) {
         let v_bs = vb(s)
@@ -301,8 +378,10 @@ pub fn type_chk(
   match t {
     Inf(e) => {
       let vn = type_inf(i, g, d, e)
-      if quote(i, v) != quote(i, vn) {
-        raise TypeError("Type Mismatch")
+      if not(subtyping(i, vn, v)) {
+        raise TypeError(
+          "Type Mismatch: inferred type is not a subtype of expected type",
+        )
       }
     }
     Lam(e) =>

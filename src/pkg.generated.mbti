@@ -14,6 +14,8 @@ pub fn neutral_quote(Int, Neutral) -> TermInf
 
 pub fn quote(Int, Value) -> TermChk
 
+pub fn subtyping(Int, Value, Value) -> Bool
+
 pub fn type_chk(Int, @list.List[(Name, Value)], @list.List[Value], TermChk, Value) -> Unit raise TypeError
 
 pub fn type_inf(Int, @list.List[(Name, Value)], @list.List[Value], TermInf) -> Value raise TypeError
@@ -27,6 +29,8 @@ pub fn v_free(Name) -> Value
 pub fn v_fst(Value) -> Value
 
 pub fn v_j_elim(Value, Value, Value, Value, Value, Value) -> Value
+
+pub fn v_max_univ(Value, Value) -> Value
 
 pub fn v_snd(Value) -> Value
 
@@ -66,7 +70,7 @@ pub impl Show for TermChk
 
 pub(all) enum TermInf {
   Ann(TermChk, TermChk)
-  Star
+  Universe(Int)
   Pi(TermChk, TermChk)
   Sigma(TermChk, TermChk)
   Bound(Int)
@@ -86,7 +90,7 @@ pub impl Show for TermInf
 #alias(Type)
 pub(all) enum Value {
   VLam((Value) -> Value)
-  VStar
+  VUniverse(Int)
   VPi(Value, (Value) -> Value)
   VSigma(Value, (Value) -> Value)
   VPair(Value, Value)
